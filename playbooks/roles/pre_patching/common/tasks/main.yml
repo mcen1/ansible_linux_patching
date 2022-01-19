@@ -1,0 +1,70 @@
+---
+- name: Pre-patching - Get current date
+  shell: date +%Y%m%d_%H%M%S
+  become: false
+  register: currentdateymd
+  delegate_to: 127.0.0.1
+  run_once: true
+
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_collect_server_metadata"
+  no_log: true
+
+- name: Pre-patching - Detect virtualization provider
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} virtualizationprovider
+  register: vprovider_result
+  changed_when: false
+  failed_when: vprovider_result.stdout | length < 2
+  become: false
+  delegate_to: 127.0.0.1
+
+- import_role:
+    name: { role: pre_patching/collect_cmdb_vmware_facts }
+  when: vprovider_result.stdout == "vmware"
+
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_check_vmware_tasks"
+  when: vprovider_result.stdout == "vmware"
+  no_log: true
+
+- name: Pre-patching - import vcenter vault
+  include_vars: vcenter_vault.yml
+  no_log: true
+
+- name: Pre-patching - Check if server is processing a task
+  shell: ../supporting_tools/taskcheck.py {{ vcenter_result.stdout }} {{ vmlitname_result.stdout }} {{ vcenter_passwd }}
+  register: taskcheck_result
+  changed_when: false
+  failed_when: "'tasks' in taskcheck_result.stdout"
+  become: false
+  delegate_to: 127.0.0.1
+  when: vprovider_result.stdout == "vmware"
+
+- import_role:
+    name: { role: create_zabbix_maintwdw }
+
+- import_role:
+    name: { role: remove_vendor_repos }
+
+- include_role:
+    name: "remove_kernel_oel"
+  when: ansible_distribution == 'OracleLinux'
+
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_setup_server_patching_metadata"
+  no_log: true
+
+- name: Pre-patching - Set for fact for os_shorthand - rhel
+  set_fact:
+    os_shorthand: rhel
+  when: ansible_distribution == 'RedHat'
+
+- name: Pre-patching - Set for fact for os_shorthand - oel
+  set_fact:
+    os_shorthand: oel
+  when: ansible_distribution == 'OracleLinux'
+
+- name: Pre-patching - Set for fact for os_shorthand - centos
+  set_fact:
+    os_shorthand: centos
+  when: ansible_distribution == 'CentOS'

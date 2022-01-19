@@ -1,0 +1,86 @@
+---
+- hosts: rancher_masters
+  gather_facts: false
+  serial: 1
+  tasks:
+
+  - name: Rancher OS upgrade
+    run_once: true
+    shell: chmod 600 ../supporting_tools/id_rsa; ssh -o StrictHostKeyChecking=no -i ../supporting_tools/id_rsa rancher@{{ inventory_hostname }} "sudo ros os upgrade -f --upgrade-console"
+    register: ros_upgrade
+    failed_when: ('Upgrading to ' not in ros_upgrade.stdout)
+    delegate_to: 127.0.0.1
+    async: 1200
+    poll: 30
+
+  - name: wait for reboot after OS upgrade
+    wait_for:
+      host: "{{ inventory_hostname }}"
+      port: 22
+      timeout: 600
+    when: ('Upgrading to rancher/os:' in ros_upgrade.stdout)
+    delegate_to: 127.0.0.1
+
+  - name: Wait for ready status
+    shell: /bin/kubectl --kubeconfig=../supporting_tools/{{ k8s_cfg }} get node {{ k8s_name|default(inventory_hostname_short) }} -o=jsonpath='{..conditions[?(@.type=="Ready")].status}'
+    register: ready_status
+    until: ready_status.stdout == "True"
+    retries: 2
+    delay: 60
+    delegate_to: 127.0.0.1
+    changed_when: false
+
+- hosts: rancher_workers
+  gather_facts: false
+  serial: 1
+  tasks:
+
+  # Draining a host automatically cordons it as well. Sometimes the drain fails for whatever reason. Loop to allow 10 retries at 30 second intervals, then move on to the next task regardless
+  - name: drain this host of running tasks
+    shell: bin/kubectl --kubeconfig=../supporting_tools/{{ k8s_cfg }} drain {{ inventory_hostname_short }} --delete-local-data --force --ignore-daemonsets
+    register: drain_result
+    delegate_to: 127.0.0.1
+    failed_when: false
+    until: drain_result.rc == 0
+    delay: 30
+    retries: 10
+
+  - name: Rancher OS upgrade
+    run_once: true
+    shell: ssh -o StrictHostKeyChecking=no -i ../supporting_tools/id_rsa rancher@{{ inventory_hostname }} "sudo ros os upgrade -f --upgrade-console"
+    register: ros_upgrade
+    failed_when: ('Upgrading to ' not in ros_upgrade.stdout)
+    delegate_to: 127.0.0.1
+    async: 1200
+    poll: 30
+
+  - name: wait for reboot after OS upgrade
+    wait_for:
+      host: "{{ inventory_hostname }}"
+      port: 22
+      timeout: 600
+    when: ('Upgrading to rancher/os:' in ros_upgrade.stdout)
+    delegate_to: 127.0.0.1
+
+  - name: Wait for ready status
+    shell: /bin/kubectl --kubeconfig=../supporting_tools/{{ k8s_cfg }} get node {{ k8s_name|default(inventory_hostname_short) }} -o=jsonpath='{..conditions[?(@.type=="Ready")].status}'
+    register: ready_status
+    until: ready_status.stdout == "True"
+    retries: 20
+    delay: 60
+    delegate_to: 127.0.0.1
+    changed_when: false
+
+  - name: Uncordon this host
+    shell: /bin/kubectl --kubeconfig=../supporting_tools/{{ k8s_cfg }} uncordon {{ inventory_hostname_short }}
+    delegate_to: 127.0.0.1
+
+  - name: Validate this host is now schedulable after patching
+    shell: /bin/kubectl --kubeconfig=../supporting_tools/{{ k8s_cfg }} get node {{ k8s_name|default(inventory_hostname_short) }} -o=jsonpath='{..spec.unschedulable}'
+    register: uncordoned_status
+    until: uncordoned_status.stdout == ""
+    retries: 30
+    delay: 60
+    delegate_to: 127.0.0.1
+    changed_when: false
+    

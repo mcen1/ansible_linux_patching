@@ -1,0 +1,10 @@
+{
+  "hostvars": {
+    "server_with_weird_port": {
+      "ansible_port": "1002"
+    },
+    "some_other_server_with_weird_port": {
+      "ansible_port": "1032"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_disable_puppet"
+  no_log: true
+
+- name: Pre-patching - check if puppet is disabled
+  become: true
+  stat: path=/opt/puppetlabs/puppet/cache/state/agent_disabled.lock
+  register: puppet_agent_disabled
+
+- name: Pre-patching - disable puppet temporarily (if not already disabled)
+  shell: /opt/puppetlabs/bin/puppet agent --disable 'Disabled temporarily for security patching.'
+  become: true
+  when: puppet_agent_disabled.stat.exists == false
+
+- name: Pre-patching - record puppet agent status
+  shell: cat /opt/puppetlabs/puppet/cache/state/agent_disabled.lock | cut -d ":" -f2 | cut -d '"' -f2
+  become: true
+  register: puppet_disabled_msg
+  when: puppet_agent_disabled.stat.exists == true

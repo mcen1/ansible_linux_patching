@@ -1,0 +1,104 @@
+---
+- hosts: servers
+  strategy: "{{playbook_strategy|default('linear')}}"
+  gather_facts: true
+  become: true
+  serial: "{{parallel_nodes|default(50)}}"
+  tasks:
+
+  - name: Pre-patching - Get password for vcenter
+    include_vars: vcenter_vault.yml
+    no_log: true
+
+  - name: Set initial metadata for playbook run
+    set_fact: patch_succeeded=failed
+    no_log: true
+
+  - name: Update patch_step fact
+    set_fact: patch_step="prepatching_tasks"
+    no_log: true
+
+  - name: Pre-patching - group level tasks
+    block:
+      - import_role:
+          name: pre_patching/common
+      - include_role:
+          name: "{{ pre_group_role }}"
+        with_items: "{{ group_additional_prepatching_roles }}"
+        loop_control:
+          loop_var: pre_group_role
+        when: group_additional_prepatching_roles is defined
+
+  - name: Pre-patching - node level tasks
+    block:
+      - include_role:
+          name: "{{ pre_indiv_role }}"
+        with_items: "{{ indiv_additional_prepatching_roles_all }}"
+        loop_control:
+          loop_var: pre_indiv_role
+        when: indiv_additional_prepatching_roles_all is defined
+      - include_role:
+          name: "{{ pre_indiv_role }}"
+        with_items: "{{ indiv_additional_prepatching_roles_platform }}"
+        loop_control:
+          loop_var: pre_indiv_role
+        when: indiv_additional_prepatching_roles_platform is defined
+      - include_role:
+          name: "pre_patching/{{facter_custom_admin_ansible_prestep_role}}"
+        when: facter_custom_admin_ansible_prestep_role is defined
+
+  - name: Update patch_step fact
+    set_fact: patch_step="applying_updates_to_packages"
+    no_log: true
+
+  - name: Patching - Warning wall
+    shell: wall 'WARNING! Patching has been initiated for this server! Please save all documents as soon as possible!'
+    ignore_errors: yes
+
+  - import_role:
+      name: { role: package_update, packages: '*', state: latest }
+
+  - name: Update patch_step fact
+    set_fact: patch_step="rebooting_server"
+    no_log: true
+
+  - name: Patching - reenable puppet agent
+    command: /opt/puppetlabs/bin/puppet agent --enable
+    when: puppet_agent_disabled.stat.exists == false or puppet_disabled_msg.stdout.find('Rundeck patching') != -1 or puppet_disabled_msg.stdout == 'Disabled temporarily for security patching.'
+    ignore_errors: yes
+
+  - name: Patching - Reboot Node
+    block:
+     - import_role:
+         name: reboot
+    when: package_results.changed or facter_custom_admin_ansible_reboot_optout is not defined
+
+  - name: Update patch_step fact
+    set_fact: patch_step="postpatching_tasks"
+    no_log: true
+
+  - name: Post-patching - node level tasks
+    block:
+      - include_role:
+          name: "{{ post_indiv_role }}"
+        with_items: "{{ indiv_additional_postpatching_roles_platform }}"
+        loop_control:
+          loop_var: post_indiv_role
+        when: indiv_additional_postpatching_roles_platform is defined
+      - include_role:
+          name: "{{ post_indiv_role }}"
+        with_items: "{{ indiv_additional_postpatching_roles_all }}"
+        loop_control:
+          loop_var: post_indiv_role
+        when: indiv_additional_postpatching_roles_all is defined
+
+  - name: Post-patching - group level tasks
+    block:
+      - include_role:
+          name: "{{ post_group_role }}"
+        with_items: "{{ group_additional_postpatching_roles }}"
+        loop_control:
+          loop_var: post_group_role
+        when: group_additional_postpatching_roles is defined
+      - import_role:
+          name: post_patching/common

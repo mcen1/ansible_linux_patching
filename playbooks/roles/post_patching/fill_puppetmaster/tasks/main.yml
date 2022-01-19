@@ -1,0 +1,8 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="postpatching_fill_puppetmaster"
+  no_log: true
+
+- name: Post-patching - Fill puppetmaster5
+  shell: /opt/patching/post 
+  become: true

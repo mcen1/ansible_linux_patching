@@ -1,0 +1,58 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="postpatching_upgrade_vm_hw"
+  no_log: true
+
+- name: Post-patching - Upgrade VM hardware - Power off VM
+  vmware_guest:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    datacenter: "{{ datacenter_result.stdout }}"
+    folder: "{{ vmfolder_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    validate_certs: false
+    state: poweredoff
+  no_log: false
+  delegate_to: 127.0.0.1
+  become: false
+
+- name: Post-patching - Upgrade VM hardware - Perform upgrade
+  vmware_guest:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    datacenter: "{{ datacenter_result.stdout }}"
+    folder: "{{ vmfolder_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    hardware:
+      version: "{{ max_vmhw.split('vmx-')[1] | int }}"
+    validate_certs: false
+  register: upgrade_result
+  no_log: false
+  delegate_to: 127.0.0.1
+  ignore_errors: yes
+  become: false
+
+- name: Post-patching - Upgrade VM hardware - Power on VM
+  vmware_guest:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    datacenter: "{{ datacenter_result.stdout }}"
+    folder: "{{ vmfolder_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    validate_certs: false
+    state: poweredon
+  no_log: false
+  delegate_to: 127.0.0.1
+  become: false
+
+- name: Post-patching - Wait for boot after VM hardware upgrade
+  wait_for:
+    host: "{{ ansible_fqdn }}"
+    port: "{{ ansible_port }}"
+    timeout: 600
+  become: false
+  delegate_to: 127.0.0.1
+  when: vprovider_result.stdout == "vmware" and vmhw_result.stdout != max_vmhw

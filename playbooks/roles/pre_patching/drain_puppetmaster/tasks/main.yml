@@ -1,0 +1,8 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_drain_puppetmaster"
+  no_log: true
+
+- name: Pre-patching - Drain puppetmaster5
+  shell: /opt/patching/pre 
+  become: true

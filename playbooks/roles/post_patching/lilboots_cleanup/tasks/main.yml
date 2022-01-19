@@ -1,0 +1,14 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="boot_filesystem_cleanup"
+  no_log: true
+
+- name: Post-patching - Check if /boot needs cleaning
+  script: ../supporting_tools/bootcheck.sh
+  register: boot_cleaning
+  ignore_errors: true
+
+- name: Post-patching - Recover /boot space by removing inactive kernels 
+  script: ../supporting_tools/lilboots.sh
+  ignore_errors: true
+  when: boot_cleaning.stdout is search('WASHME')

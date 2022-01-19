@@ -1,0 +1,47 @@
+---
+- name: Fact collection expansion
+  setup:
+    gather_subset:
+      - '!all'
+      - min
+      - hardware
+      - facter
+
+- import_role:
+    name: { role: remove_vendor_repos}
+
+- include_role:
+    name: "post_patching/remove_old_kernels"
+
+- include_role:
+    name: "post_patching/{{facter_custom_admin_ansible_poststep_role}}"
+  when: facter_custom_admin_ansible_poststep_role is defined
+
+# Remove 'kernel' if we have UEK
+- include_role:
+    name: "remove_kernel_oel"
+  when: ansible_distribution == 'OracleLinux'
+
+- include_role:
+    name: "post_patching/upgrade_vm_hdw"
+  when: vprovider_result.stdout == "vmware" and vmhw_result.stdout.split('vmx-')[1] < max_vmhw.split('vmx-')[1]
+
+- include_role:
+    name: "post_patching/lilboots_cleanup"
+
+- name: Post-patching - echo last patch date custom puppet fact
+  shell: echo "custom_last_patch=$(date)" > /opt/puppetlabs/facter/facts.d/custom_last_patch.txt
+  when: package_results.changed
+
+- name: Set ansible variable for patching succeeded
+  set_fact: patch_succeeded=success
+  when: patch_succeeded!='appisdown' and patch_succeeded!='fsfull'
+
+- name: Log patch status
+  uri:
+    url: "https://somewebsite.company.com/cgi-bin/setpatchstatus?servername={{ ansible_fqdn }}&status={{ patch_succeeded }}&suppress={{suppress_notifications|default(false)}}&additionalinfo={{ patch_step }}"
+    method: POST
+  delegate_to: 127.0.0.1
+  ignore_errors: yes 
+  become: false
+

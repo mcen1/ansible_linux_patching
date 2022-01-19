@@ -1,0 +1,30 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_create_vm_snapshot"
+  no_log: true
+
+- name: Pre-patching - Create VM snapshot
+  vmware_guest_snapshot:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    datacenter: "{{ datacenter_result.stdout }}"
+    folder: "{{ vmfolder_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    state: present
+    snapshot_name: "{{ currentdateymd.stdout }}"
+    description: "Created by ansible Linux patching"
+    quiesce: false
+    memory_dump: false
+    validate_certs: false
+  register: snap_result
+  no_log: false
+  ignore_errors: false
+  delegate_to: 127.0.0.1
+  become: false
+  when: vprovider_result.stdout == "vmware"
+
+- name: Invoke error handler
+  include_role:
+    name: { role: error_handling, status_code: "Unable to create snapshot"}
+  when: snap_result.changed != True or snap_result.failed == True

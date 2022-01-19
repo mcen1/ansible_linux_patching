@@ -1,0 +1,175 @@
+---
+- name: silence client checks
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      { 
+          "subscription":"client:{{ inventory_hostname }}", 
+          "dc": "Expedient", 
+          "creator":"{{ build_user }}", 
+          "expire":{{ silence_expire }}, 
+          "reason":"{{ silence_reason }}", 
+          "expire_on_resolve":{{ expire_on_resolve }},
+          "check":"{{ item }}"
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  with_items: "{{ silence_check.split(',') }}"
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when: 
+    - silence_check != "*"
+    - silence_client != 'all_clients'
+    - silence_expire != "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+
+- name: silence entire client
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      {
+          "subscription":"client:{{ inventory_hostname }}",
+          "dc": "Expedient",
+          "creator":"{{ build_user }}",
+          "expire":{{ silence_expire }},
+          "reason":"{{ silence_reason }}",
+          "expire_on_resolve":{{ expire_on_resolve }}
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when:
+    - silence_check == "*"
+    - silence_expire != "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+
+- name: silence checks for all clients
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      {
+          "dc": "Expedient",
+          "creator":"{{ build_user }}",
+          "expire":{{ silence_expire }},
+          "reason":"{{ silence_reason }}",
+          "expire_on_resolve":{{ expire_on_resolve }},
+          "check":"{{ item }}"
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  with_items: "{{ silence_check.split(',') }}"
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when: 
+    - silence_check != "*"
+    - silence_client == 'all_clients'
+    - silence_expire != "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+
+- name: silence client checks with no expiration
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      {
+          "subscription":"client:{{ inventory_hostname }}",
+          "dc": "Expedient",
+          "creator":"{{ build_user }}",
+          "reason":"{{ silence_reason }}",
+          "expire_on_resolve":{{ expire_on_resolve }},
+          "check":"{{ item }}"
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  with_items: "{{ silence_check.split(',') }}"
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when:
+    - silence_check != "*"
+    - silence_client != 'all_clients'
+    - silence_expire == "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+
+- name: silence entire client with no expiration
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      {
+          "subscription":"client:{{ inventory_hostname }}",
+          "dc": "Expedient",
+          "creator":"{{ build_user }}",
+          "reason":"{{ silence_reason }}",
+          "expire_on_resolve":{{ expire_on_resolve }}
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when:
+    - silence_check == "*"
+    - silence_expire == "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+
+- name: silence checks for all clients with no expiration
+  uri:
+    url:            'http://{{ sensu_host }}:4567/silenced'
+    method:         POST
+    headers:
+      Content-Type: 'application/json'
+    body_format:    json
+    body: |-
+      {
+          "dc": "Expedient",
+          "creator":"{{ build_user }}",
+          "reason":"{{ silence_reason }}",
+          "check":"{{ item }}"
+      }
+    validate_certs: no
+    timeout:        10
+    status_code:    201
+  with_items: "{{ silence_check.split(',') }}"
+  delegate_to: 127.0.0.1
+  register: status_code_result
+  when:
+    - silence_check != "*"
+    - silence_client == 'all_clients'
+    - silence_expire == "-1"
+  until: status_code_result.status == 201
+  retries: 5
+  delay: 2
+

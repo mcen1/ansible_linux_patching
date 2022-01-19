@@ -1,0 +1,30 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_removel_rhel_kernel_if_uek"
+  no_log: true
+
+- name: Check if kernel-uek is installed
+  shell: rpm -qa kernel-uek
+  register: kerneluekavail
+  args:
+    warn: false
+
+- name: Check if kernel is installed
+  shell: rpm -qa kernel
+  register: kernelexists
+  args:
+    warn: false
+
+
+- name: Remove RHEL kernel if uek installed
+  yum:
+    name: kernel
+    state: absent
+  when: kerneluekavail.stdout|length>3 and kernelexists.stdout|length>3
+
+- name: enable puppet
+  shell: /opt/puppetlabs/bin/puppet agent --enable
+
+- name: restart puppet
+  puppet:
+  ignore_errors: true

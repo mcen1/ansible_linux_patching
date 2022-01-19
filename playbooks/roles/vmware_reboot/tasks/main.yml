@@ -1,0 +1,52 @@
+
+- name: Gather VM info
+  vmware_guest_info:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    validate_certs: no
+    datacenter: "{{ datacenter_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    schema: "vsphere"
+    properties: ["runtime.powerState"]
+  delegate_to: localhost
+  become: false
+  register: vm_info
+
+- name: Update powerfact
+  set_fact: vm_power_fact="restarted"
+  no_log: true
+
+- name: Update powerfact if powered off
+  set_fact: vm_power_fact="poweredon"
+  no_log: true
+  when: vm_info.instance.runtime.powerState == "poweredOff"
+
+- name: Reset hung VM via VMware
+  vmware_guest_powerstate:
+    hostname: "{{ vcenter_result.stdout }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_passwd }}"
+    validate_certs: no
+    folder: "{{ vmfolder_result.stdout }}"
+    name: "{{ vmlitname_result.stdout }}"
+    state: "{{vm_power_fact}}"
+  delegate_to: 127.0.0.1
+  register: vmware_reset_output
+  become: false
+  ignore_errors: true
+
+- name: Wait for SSH connection
+  wait_for_connection:
+    delay: 30
+    timeout: 400
+    sleep: 30
+  register: ssh_connection_check
+  ignore_errors: true
+
+- name: Invoke error handler
+  include_role:
+    name: { role: error_handling, status_code: "Post patching reboot failed"}
+  when: ssh_connection_check.failed == True
+  
+  

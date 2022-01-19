@@ -1,0 +1,16 @@
+---
+- name: Remove vendor repos
+  failed_when: false
+  find:
+    paths: /etc/yum.repos.d/
+    patterns: "public-yum-ol*.repo,oracle-linux*.repo,uek*.repo,rhel-source.repo,Cent*.repo,virt*.repo"
+  register: wildcard_files_to_delete
+
+- name: Deleting vendor repo files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ wildcard_files_to_delete.files }}"
+  when: wildcard_files_to_delete.files is defined
+  no_log: true
+

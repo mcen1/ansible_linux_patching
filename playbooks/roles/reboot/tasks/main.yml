@@ -1,0 +1,27 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="reboot_after_patching"
+  no_log: true
+
+- include_role:
+    name: "mid_patching/{{facter_custom_admin_ansible_midpatching_role}}"
+  when: facter_custom_admin_ansible_midpatching_role is defined
+
+- name: Patching - Reboot after successful package updates
+  reboot:
+    msg: "Server is being rebooted as part of patching."
+    reboot_timeout: 510
+    post_reboot_delay: "{{ pause_after_reboot|default(30) }}"
+  register: reboot_output
+  ignore_errors: true
+
+- name: Patching - Reboot Node via VMware
+  block:
+   - include_role:
+       name: "vmware_reboot"
+  when: reboot_output.failed == True and vprovider_result.stdout == "vmware"
+
+- name: Invoke error handler
+  include_role:
+    name: { role: error_handling, status_code: "Post patching reboot failed"}
+  when: reboot_output.failed == True and vprovider_result.stdout != "vmware"

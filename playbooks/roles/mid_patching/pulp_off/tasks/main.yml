@@ -1,0 +1,4 @@
+---
+- name: Pre-reboot - Stop pulp
+  shell: /usr/local/sbin/pulp_stop_aggressive.sh
+  become: true

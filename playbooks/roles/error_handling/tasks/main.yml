@@ -1,0 +1,89 @@
+---
+  - name: Log erroneous patch status
+    uri:
+      url: "https://somewebsite.company.com/cgi-bin/setpatchstatus?servername={{ ansible_fqdn }}&status={{ patch_succeeded }}&suppress={{suppress_notifications|default(false)}}&additionalinfo={{ patch_step }}"
+      method: POST
+    ignore_errors: true
+    delegate_to: 127.0.0.1
+    become: false
+
+  - name: Error handling - Create VM snapshot of failed patching state
+    vmware_guest_snapshot:
+      hostname: "{{ vcenter_result.stdout }}"
+      username: "{{ ansible_vmware_user }}"
+      password: "{{ vcenter_passwd }}"
+      datacenter: "{{ datacenter_result.stdout }}"
+      folder: "{{ vmfolder_result.stdout }}"
+      name: "{{ vmlitname_result.stdout }}"
+      state: present
+      snapshot_name: "failed_patch_{{ currentdateymd.stdout }}"
+      description: "Created by ansible Linux patching"
+      quiesce: false
+      memory_dump: false
+      validate_certs: false
+    no_log: false
+    ignore_errors: false
+    delegate_to: 127.0.0.1
+    become: false
+    when: vprovider_result.stdout == "vmware"
+
+  - name: Error handling - Revert to pre-patching snapshot
+    vmware_guest_snapshot:
+      hostname: "{{ vcenter_result.stdout }}"
+      username: "{{ ansible_vmware_user }}"
+      password: "{{ vcenter_passwd }}"
+      datacenter: "{{ datacenter_result.stdout }}"
+      folder: "{{ vmfolder_result.stdout }}"
+      name: "{{ vmlitname_result.stdout }}"
+      state: revert
+      snapshot_name: "{{ currentdateymd.stdout }}"
+      description: "Created by ansible Linux patching"
+      quiesce: false
+      memory_dump: false
+      validate_certs: false
+    register: snap_restore
+    no_log: false
+    ignore_errors: true
+    delegate_to: 127.0.0.1
+    become: false
+    when: snap_result.changed == True and vprovider_result.stdout == "vmware"
+
+  - name: Error Handling - Power on VM after restore
+    vmware_guest:
+      hostname: "{{ vcenter_result.stdout }}"
+      username: "{{ ansible_vmware_user }}"
+      password: "{{ vcenter_passwd }}"
+      validate_certs: no
+      datacenter: "{{ datacenter_result.stdout }}"
+      folder: "{{ vmfolder_result.stdout }}"
+      name: "{{ vmlitname_result.stdout }}"
+      state: poweredon
+    delegate_to: 127.0.0.1
+    when: snap_restore is defined and snap_restore.rc is defined and snap_restore.rc == 0
+
+  - name: Error handling - Wait for boot after restoring VM from snapshot
+    wait_for:
+      host: "{{ ansible_fqdn }}"
+      port: "{{ ansible_port }}"
+      timeout: 600
+    become: false
+    register: restore_reboot
+    ignore_errors: true
+    delegate_to: 127.0.0.1
+    when: snap_restore is defined and snap_restore.rc is defined and snap_restore.rc == 0
+
+  - name: Error Handling - Server unable to boot after restore to snapshot
+    fail:
+      msg: "An error occured while patching. Although {{ ansible_fqdn }} was restored to the most recent snapshot, it was unable to be rebooted."
+    when: restore_reboot is defined and restore_reboot.rc is defined and restore_reboot.rc != 0
+
+  - name: Error handling - reenable puppet agent
+    shell: /opt/puppetlabs/bin/puppet agent --enable
+    when: puppet_agent_disabled is defined and (puppet_agent_disabled.stat.exists == false or puppet_disabled_msg.stdout == "Disabled temporarily for security patching.")
+    ignore_errors: true
+
+  - name: Error Handling - The server has been restored to the most recent snapshot
+    fail:
+      msg: "An error occured while patching. The server {{ ansible_fqdn }} has been restored to the most recent snapshot if applicable."
+
+

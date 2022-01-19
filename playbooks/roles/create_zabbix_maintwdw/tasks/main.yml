@@ -1,0 +1,27 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_create_zabbix_window"
+  no_log: true
+
+- name: Pre-patching - import Zabbix svc acct password
+  include_vars: ansible_zabbix_vault.yml
+  no_log: true
+
+- name: Pre-patching - Create a named maintenance window for 90 minutes
+  zabbix_maintenance:
+    name: "patching_maintenance_{{ ansible_fqdn }}"
+    host_name: "{{ ansible_fqdn }}"
+    state: present
+    minutes: 90
+    server_url: http://zabbix.company.com/zabbix/api_jsonrpc.php
+    login_user: zabbix_user
+    login_password: "{{ ansible_zabbix_passwd }}"
+  become: false
+  register: zabbix_maint_wdw
+  ignore_errors: true
+  delegate_to: 127.0.0.1
+
+- name: Invoke error handler
+  include_role:
+    name: { role: error_handling, status_code: "Failed to create a Zabbix maintenance window."}
+  when: zabbix_maint_wdw.failed == true

@@ -1,0 +1,40 @@
+---
+- name: Pre-patching - Detect vCenter
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} vcenter
+  register: vcenter_result
+  changed_when: false
+  failed_when: vcenter_result.stdout | length < 2
+  become: false
+  delegate_to: 127.0.0.1
+
+- name: Pre-patching - Detect VM hardware
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} vmhw
+  register: vmhw_result
+  changed_when: false
+  failed_when: false
+  become: false
+  delegate_to: 127.0.0.1
+
+- name: Pre-patching - Detect VM Datacenter
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} datacenter
+  register: datacenter_result
+  changed_when: false
+  failed_when: datacenter_result.stdout | length < 2
+  become: false
+  delegate_to: 127.0.0.1
+
+- name: Pre-patching - Detect VM folder
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} vmfolder
+  register: vmfolder_result
+  changed_when: false
+  failed_when: vmfolder_result.stdout | length < 2
+  become: false
+  delegate_to: 127.0.0.1
+
+- name: Pre-patching - Detect VM literal name
+  shell: ../supporting_tools/getcmdbvminfo.py {{ ansible_hostname }} literalvmname
+  register: vmlitname_result
+  changed_when: false
+  failed_when: vmlitname_result.stdout | length < 2
+  become: false
+  delegate_to: 127.0.0.1

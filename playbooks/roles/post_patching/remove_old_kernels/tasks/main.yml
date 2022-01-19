@@ -1,0 +1,7 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="postpatching_remove_old_kernels"
+  no_log: true
+
+- name: Post-patching - delete old kernels
+  script: ../supporting_tools/remove_old_kernels.sh

@@ -1,0 +1,71 @@
+---
+- name: Update patch_step fact
+  set_fact: patch_step="prepatching_update_companyrepo"
+  no_log: true
+
+- name: Pre-patching - Update 
+  block:
+    - name: Pre-patching - gather minor OS target version
+      shell: curl -sk "https://website/cgi-bin/patchinfo?major={{ ansible_distribution_major_version }}&os={{ os_shorthand }}"
+      args:
+        warn: false
+      register: minor_version
+      changed_when: false
+      become: false
+      delegate_to: 127.0.0.1
+    - name: Pre-patching - gather local errata repo name
+      shell: yum repolist | grep ERRATA_ | awk '{print $1}'
+      register: current_errata_repo
+      args:
+        warn: false
+      changed_when: false
+    - name: Pre-patching - gather local base repo name
+      shell: yum repolist | grep BASE_ | awk '{print $1}'
+      register: current_base_repo
+      args:
+        warn: false
+      changed_when: false
+    - name: Pre-patching - remove current base repo 
+      yum_repository:
+        name: "{{ current_base_repo.stdout }}"
+        file: patchingrepo
+        state: absent
+      when: minor_version.stdout != facter_os.release.minor
+    - name: Pre-patching - remove current errata repo 
+      yum_repository:
+        name: "{{ current_errata_repo.stdout }}"
+        file: patchingrepo
+        state: absent
+      when: ( 'CURRENT' not in current_errata_repo.stdout )
+    - name: Pre-patching - add new base repo 
+      yum_repository:
+        name: BASE_{{ ansible_distribution }}_{{ ansible_distribution_major_version }}.{{ minor_version.stdout }}_x86_64
+        description: "{{ ansible_distribution }} {{ ansible_distribution_major_version }}.{{ minor_version.stdout }} x86_64"
+        baseurl: http://pulp.company.com/pulp/repos/base/{{ os_shorthand }}/x86_64/{{ ansible_distribution_major_version }}/{{ minor_version.stdout }}/
+        file: patchingrepo
+        state: present
+        gpgcheck: no
+        enabled: yes
+      when: minor_version.stdout != facter_os.release.minor
+    - name: Pre-patching - add new errata repo 
+      yum_repository:
+        name: ERRATA_{{ ansible_distribution }}_{{ ansible_distribution_major_version }}_x86_64_CURRENT
+        description: "{{ ansible_distribution }} {{ ansible_distribution_major_version }} Errata Target CURRENT"
+        baseurl: http://pulp.company.com/pulp/repos/targets/{{ os_shorthand }}/x86_64/{{ ansible_distribution_major_version }}/CURRENT
+        file: patchingrepo
+        state: present
+        gpgcheck: no
+        enabled: yes
+      when: ( 'CURRENT' not in current_errata_repo.stdout ) and os_shorthand != "centos"
+    - name: Pre-patching - add new centos updates repo
+      yum_repository:
+        name: ERRATA_{{ ansible_distribution }}_UPDATES_{{ ansible_distribution_major_version }}_x86_64_CURRENT
+        description: "{{ ansible_distribution }} {{ ansible_distribution_major_version }} Errata Target CURRENT"
+        baseurl: http://pulp.company.com/pulp/repos/targets/centos_updates/x86_64/{{ ansible_distribution_major_version }}/CURRENT
+        file: patchingrepo
+        state: present
+        gpgcheck: no
+        enabled: yes
+      when: ( 'CURRENT' not in current_errata_repo.stdout ) and os_shorthand == "centos"
+  tags: companyrepo
+  when: ansible_distribution != 'Debian' and ansible_distribution != 'Ubuntu'

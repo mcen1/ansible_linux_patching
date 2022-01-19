@@ -1,0 +1,7 @@
+---
+max_vmhw: vmx-11
+indiv_additional_prepatching_roles_all:
+  - pre_patching/create_vmware_snapshot
+  - pre_patching/update_companyrepo
+  - pre_patching/remove_old_kernels
+  - pre_patching/disable_puppet
